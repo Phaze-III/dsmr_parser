@@ -124,6 +124,24 @@ class FileInputReader(object):
                     except ParseError as e:
                         logger.error('Failed to parse telegram: %s', e)
 
+    def read(self):
+        """
+        Read complete DSMR telegram's from stdin and parse it
+        into CosemObject's and MbusObject's
+        :rtype: generator
+        """
+        with fileinput.input(mode='rb') as file_handle:
+            while True:
+                data = file_handle.readline()
+                self.telegram_buffer.append(data.decode('ascii'))
+
+                for telegram in self.telegram_buffer.get_all():
+                    try:
+                        yield self.telegram_parser.parse(telegram)
+                    except InvalidChecksumError as e:
+                        logger.warning(str(e))
+                    except ParseError as e:
+                        logger.error('Failed to parse telegram: %s', e)
 
 class FileTailReader(object):
     """
