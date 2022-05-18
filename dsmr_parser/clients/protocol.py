@@ -16,12 +16,22 @@ from dsmr_parser.clients.settings import SERIAL_SETTINGS_V2_2, \
 
 def create_dsmr_protocol(dsmr_version, telegram_callback, loop=None, **kwargs):
     """Creates a DSMR asyncio protocol."""
+    protocol = _create_dsmr_protocol(dsmr_version, telegram_callback,
+                                     DSMRProtocol, loop, **kwargs)
+    return protocol
+
+
+def _create_dsmr_protocol(dsmr_version, telegram_callback, protocol, loop=None, **kwargs):
+    """Creates a DSMR asyncio protocol."""
 
     if dsmr_version == '2.2':
         specification = telegram_specifications.V2_2
         serial_settings = SERIAL_SETTINGS_V2_2
     elif dsmr_version == '4':
         specification = telegram_specifications.V4
+        serial_settings = SERIAL_SETTINGS_V4
+    elif dsmr_version == '4+':
+        specification = telegram_specifications.V5
         serial_settings = SERIAL_SETTINGS_V4
     elif dsmr_version == '5':
         specification = telegram_specifications.V5
@@ -32,11 +42,17 @@ def create_dsmr_protocol(dsmr_version, telegram_callback, loop=None, **kwargs):
     elif dsmr_version == "5L":
         specification = telegram_specifications.LUXEMBOURG_SMARTY
         serial_settings = SERIAL_SETTINGS_V5
+    elif dsmr_version == "5S":
+        specification = telegram_specifications.SWEDEN
+        serial_settings = SERIAL_SETTINGS_V5
+    elif dsmr_version == "Q3D":
+        specification = telegram_specifications.Q3D
+        serial_settings = SERIAL_SETTINGS_V5
     else:
         raise NotImplementedError("No telegram parser found for version: %s",
                                   dsmr_version)
 
-    protocol = partial(DSMRProtocol, loop, TelegramParser(specification),
+    protocol = partial(protocol, loop, TelegramParser(specification),
                        telegram_callback=telegram_callback, **kwargs)
 
     return protocol, serial_settings
@@ -96,12 +112,16 @@ class DSMRProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         """Add incoming data to buffer."""
-        data = data.decode('ascii')
+
+        # accept latin-1 (8-bit) on the line, to allow for non-ascii transport or padding
+        data = data.decode("latin1")
         self._active = True
         self.log.debug('received data: %s', data)
         self.telegram_buffer.append(data)
 
         for telegram in self.telegram_buffer.get_all():
+            # ensure actual telegram is ascii (7-bit) only (ISO 646:1991 IRV required in section 5.5 of IEC 62056-21)
+            telegram = telegram.encode("latin1").decode("ascii")
             self.handle_telegram(telegram)
 
     def keep_alive(self):
