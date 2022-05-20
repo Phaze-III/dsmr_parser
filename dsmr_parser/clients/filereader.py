@@ -146,6 +146,7 @@ class FileInputReader(object):
                     except ParseError as e:
                         logger.error('Failed to parse telegram: %s', e)
 
+
 class FileTailReader(object):
     """
       Filereader to read and parse raw telegram strings from the tail of a
